@@ -3,6 +3,20 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { ChevronDown, ChevronUp, Filter, Database, ArrowUpRight, ArrowDownRight, GitCompare, RefreshCw } from "lucide-react";
 import { TODAY, YESTERDAY, TODAY_DATE, YESTERDAY_DATE } from "./data";
 
+// ‚îÄ‚îÄ‚îÄ Fiscal Quarter: Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ
+function getQuarter(close_date) {
+  if (!close_date) return "Unknown";
+  try {
+    const y = parseInt(close_date.slice(0, 4));
+    const m = parseInt(close_date.slice(5, 7));
+    const fy = String(y).slice(-2);
+    if (m <= 3)  return `Q1 FY${fy}`;
+    if (m <= 6)  return `Q2 FY${fy}`;
+    if (m <= 9)  return `Q3 FY${fy}`;
+    return `Q4 FY${fy}`;
+  } catch (e) { return "Unknown"; }
+}
+
 const STAGE_MAP = {
   "1 - Target (1%)":1,"2 - Discovery (5%)":5,"3 - Objectives (10%)":10,
   "4 - Sponsor (20%)":20,"4 - Economic Buyer Identified (30%)":30,
@@ -25,6 +39,7 @@ const fmtK = (n) => {
   return `${s}$${a.toFixed(0)}`;
 };
 const FC_COLORS = { Commit: "#22d3ee", Expect: "#a78bfa", Upside: "#f59e0b", Submitted: "#34d399" };
+const QTR_COLORS = { Q1: "#22d3ee", Q2: "#a78bfa", Q3: "#f59e0b", Q4: "#34d399" };
 
 function computeDeltas(today, yesterday) {
   if (!yesterday || !yesterday.length) return [];
@@ -34,26 +49,18 @@ function computeDeltas(today, yesterday) {
   const out = [];
   for (const id of allIds) {
     const t = tMap[id], y = yMap[id];
-    if (t && !y) {
-      out.push({ ...t, flags: ["new"], section: "increase", delta_nnacv: t.nnacv, change_label: "New deal entered pipeline", prev: null });
-      continue;
-    }
-    if (y && !t) {
-      out.push({ ...y, flags: ["removed"], section: "decrease", delta_nnacv: -y.nnacv, change_label: "Removed from pipeline", prev: null });
-      continue;
-    }
+    if (t && !y) { out.push({ ...t, flags: ["new"], section: "increase", delta_nnacv: t.nnacv, change_label: "New deal entered pipeline", prev: null }); continue; }
+    if (y && !t) { out.push({ ...y, flags: ["removed"], section: "decrease", delta_nnacv: -y.nnacv, change_label: "Removed from pipeline", prev: null }); continue; }
     const flags = [], labels = [];
-    const tf = FC_RANK[t.forecast_category] || 0;
-    const yf = FC_RANK[y.forecast_category] || 0;
-    const tp = spct(t.stage), yp = spct(y.stage);
-    const nd = t.nnacv - y.nnacv;
-    if (tf > yf) { flags.push("fc_upgraded"); labels.push(`${y.forecast_category} ‚Üí ${t.forecast_category}`); }
+    const tf = FC_RANK[t.forecast_category] || 0, yf = FC_RANK[y.forecast_category] || 0;
+    const tp = spct(t.stage), yp = spct(y.stage), nd = t.nnacv - y.nnacv;
+    if (tf > yf) { flags.push("fc_upgraded");   labels.push(`${y.forecast_category} ‚Üí ${t.forecast_category}`); }
     if (tf < yf) { flags.push("fc_downgraded"); labels.push(`${y.forecast_category} ‚Üí ${t.forecast_category} ‚Üì`); }
-    if (nd > 1000) { flags.push("nnacv_up"); labels.push(`NNACV +${fmtK(nd)}`); }
+    if (nd > 1000)  { flags.push("nnacv_up");   labels.push(`NNACV +${fmtK(nd)}`); }
     if (nd < -1000) { flags.push("nnacv_down"); labels.push(`NNACV ${fmtK(nd)}`); }
     if (t.close_date > y.close_date) { flags.push("date_pushed"); labels.push(`Close pushed ‚Üí ${t.close_date}`); }
     if (t.close_date < y.close_date) { flags.push("date_pulled"); labels.push(`Close pulled ‚Üí ${t.close_date}`); }
-    if (tp > yp) { flags.push("stage_up"); labels.push(`Stage ${yp}%‚Üí${tp}%`); }
+    if (tp > yp) { flags.push("stage_up");   labels.push(`Stage ${yp}%‚Üí${tp}%`); }
     if (tp < yp) { flags.push("stage_down"); labels.push(`Stage ${yp}%‚Üí${tp}% ‚Üì`); }
     if (!flags.length) continue;
     const section = flags.some(f => f.startsWith("fc_")) ? "movement"
@@ -68,12 +75,15 @@ const FCBadge = ({ fc }) => {
   const c = FC_COLORS[fc] || "#6b7280";
   return <span style={{ background: `${c}18`, color: c, border: `1px solid ${c}35`, borderRadius: 4, padding: "2px 8px", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>{fc}</span>;
 };
-
 const WFChip = ({ wf }) => {
   const c = wf === "RaptorDB" ? "#60a5fa" : "#63DF4E";
   return <span style={{ background: `${c}15`, color: c, border: `1px solid ${c}30`, borderRadius: 4, padding: "2px 7px", fontSize: 10, fontWeight: 700 }}>{wf === "Workflow Data Fabric" ? "WDF" : wf}</span>;
 };
-
+const QtrChip = ({ date }) => {
+  const q = getQuarter(date);
+  const c = QTR_COLORS[q.slice(0, 2)] || "#6b7280";
+  return <span style={{ background: `${c}18`, color: c, border: `1px solid ${c}30`, borderRadius: 4, padding: "2px 7px", fontSize: 10, fontWeight: 700 }}>{q}</span>;
+};
 const StagePip = ({ pct }) => {
   const c = pct >= 70 ? "#22d3ee" : pct >= 40 ? "#a78bfa" : pct >= 20 ? "#f59e0b" : "#374151";
   return (
@@ -94,7 +104,7 @@ function Row({ d, isDelta }) {
       <tr onClick={() => setOpen(!open)} style={{ cursor: "pointer", background: open ? "#0b2535" : "transparent", borderBottom: "1px solid #0d2535", transition: "background 0.12s" }}>
         <td style={{ padding: "9px 12px" }}>
           <div style={{ color: "#ddeef5", fontWeight: 600, fontSize: 12 }}>{d.account || "(unnamed)"}</div>
-          <div style={{ color: "#3a6070", fontSize: 10, maxWidth: 230, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.opty_name}</div>
+          <div style={{ color: "#3a6070", fontSize: 10, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.opty_name}</div>
         </td>
         <td style={{ padding: "9px 12px" }}><WFChip wf={d.workflow} /></td>
         <td style={{ padding: "9px 12px" }}>
@@ -103,11 +113,12 @@ function Row({ d, isDelta }) {
         </td>
         <td style={{ padding: "9px 12px" }}><FCBadge fc={d.forecast_category} /></td>
         <td style={{ padding: "9px 12px" }}><StagePip pct={spct(d.stage)} /></td>
-        <td style={{ padding: "9px 12px", color: "#4a7a8a", fontSize: 11 }}>{d.close_date}</td>
-        {isDelta && <td style={{ padding: "9px 12px", color: "#5a8fa3", fontSize: 10, fontStyle: "italic", maxWidth: 190 }}>{d.change_label}</td>}
-        <td style={{ padding: "9px 12px", textAlign: "center" }}>
-          {open ? <ChevronUp size={12} color="#3a6070" /> : <ChevronDown size={12} color="#3a6070" />}
+        <td style={{ padding: "9px 12px" }}>
+          <div style={{ fontSize: 11, color: "#4a7a8a", marginBottom: 3 }}>{d.close_date}</div>
+          <QtrChip date={d.close_date} />
         </td>
+        {isDelta && <td style={{ padding: "9px 12px", color: "#5a8fa3", fontSize: 10, fontStyle: "italic", maxWidth: 180 }}>{d.change_label}</td>}
+        <td style={{ padding: "9px 12px", textAlign: "center" }}>{open ? <ChevronUp size={12} color="#3a6070" /> : <ChevronDown size={12} color="#3a6070" />}</td>
       </tr>
       {open && (
         <tr style={{ background: "#081d2c" }}>
@@ -131,15 +142,13 @@ function Section({ title, desc, accent, Icon, deals, empty, isDelta }) {
   const [closed, setClosed] = useState(false);
   const total = deals.reduce((s, d) => s + (d.delta_nnacv || 0), 0);
   const hdrs = isDelta
-    ? ["Account", "Workflow", "NNACV / Œî", "Forecast", "Stage", "Close", "Change", ""]
-    : ["Account", "Workflow", "NNACV", "Forecast", "Stage", "Close Date", ""];
+    ? ["Account", "Workflow", "NNACV / Œî", "Forecast", "Stage", "Close / Qtr", "Change", ""]
+    : ["Account", "Workflow", "NNACV", "Forecast", "Stage", "Close / Qtr", ""];
   return (
     <div style={{ marginBottom: 14, borderRadius: 11, overflow: "hidden", border: `1px solid ${accent}22` }}>
       <div onClick={() => setClosed(!closed)} style={{ background: `${accent}08`, padding: "12px 15px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: closed ? "none" : `1px solid ${accent}18` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <div style={{ background: `${accent}18`, borderRadius: 7, padding: "5px 6px", display: "flex" }}>
-            <Icon size={13} color={accent} />
-          </div>
+          <div style={{ background: `${accent}18`, borderRadius: 7, padding: "5px 6px", display: "flex" }}><Icon size={13} color={accent} /></div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
               <span style={{ color: accent, fontWeight: 800, fontSize: 13 }}>{title}</span>
@@ -175,6 +184,13 @@ function Section({ title, desc, accent, Icon, deals, empty, isDelta }) {
 export default function App() {
   const deltas = useMemo(() => computeDeltas(TODAY, YESTERDAY), []);
 
+  // Quarter options ordered correctly
+  const quarters = useMemo(() => {
+    const qSet = new Set(TODAY.map(d => getQuarter(d.close_date)).filter(q => q !== "Unknown"));
+    const qOrder = ["Q1 FY26","Q2 FY26","Q3 FY26","Q4 FY26","Q1 FY27","Q2 FY27","Q3 FY27","Q4 FY27"];
+    return ["All Quarters", ...qOrder.filter(q => qSet.has(q))];
+  }, []);
+
   const areas = useMemo(() => ["All Areas", ...new Set(TODAY.map(d => d.area).filter(Boolean))].sort((a, b) => a === "All Areas" ? -1 : a.localeCompare(b)), []);
   const [area, setArea] = useState("All Areas");
   const regions = useMemo(() => {
@@ -184,21 +200,24 @@ export default function App() {
   const [region, setRegion] = useState("All Regions");
   const [wf, setWf] = useState("All");
   const [fc, setFc] = useState("All");
+  const [qtr, setQtr] = useState("All Quarters");
   const onArea = (v) => { setArea(v); setRegion("All Regions"); };
 
   const filtered = useMemo(() => TODAY.filter(d =>
     (area === "All Areas" || d.area === area) &&
     (region === "All Regions" || d.region === region) &&
     (wf === "All" || d.workflow === wf) &&
-    (fc === "All" || d.forecast_category === fc)
-  ), [area, region, wf, fc]);
+    (fc === "All" || d.forecast_category === fc) &&
+    (qtr === "All Quarters" || getQuarter(d.close_date) === qtr)
+  ), [area, region, wf, fc, qtr]);
 
   const fDeltas = useMemo(() => deltas.filter(d =>
     (area === "All Areas" || d.area === area) &&
     (region === "All Regions" || d.region === region) &&
     (wf === "All" || d.workflow === wf) &&
-    (fc === "All" || d.forecast_category === fc)
-  ), [deltas, area, region, wf, fc]);
+    (fc === "All" || d.forecast_category === fc) &&
+    (qtr === "All Quarters" || getQuarter(d.close_date) === qtr)
+  ), [deltas, area, region, wf, fc, qtr]);
 
   const fMov = fDeltas.filter(d => d.section === "movement").sort((a, b) => b.nnacv - a.nnacv);
   const fInc = fDeltas.filter(d => d.section === "increase").sort((a, b) => b.delta_nnacv - a.delta_nnacv);
@@ -214,12 +233,13 @@ export default function App() {
     n: filtered.filter(d => d.forecast_category === f).length
   })).filter(x => x.v > 0);
 
-  const areaChart = [...new Set(filtered.map(d => d.area).filter(Boolean))].map(a => ({
-    name: a.replace(" (AREA)", "").replace("AMS Commercial ", "").replace("Canada ", "CA "),
-    v: filtered.filter(d => d.area === a).reduce((s, d) => s + d.nnacv, 0)
-  })).sort((a, b) => b.v - a.v).slice(0, 7);
+  const qtrChart = ["Q1 FY26","Q2 FY26","Q3 FY26","Q4 FY26","Q1 FY27"].map(q => ({
+    name: q,
+    v: filtered.filter(d => getQuarter(d.close_date) === q).reduce((s, d) => s + d.nnacv, 0),
+    n: filtered.filter(d => getQuarter(d.close_date) === q).length
+  })).filter(x => x.v > 0);
 
-  const ss = { background: "#071e2a", border: "1px solid #162e3a", borderRadius: 6, color: "#8ab8c8", padding: "6px 10px", fontSize: 11, cursor: "pointer", outline: "none", appearance: "none", WebkitAppearance: "none", minWidth: 150 };
+  const ss = { background: "#071e2a", border: "1px solid #162e3a", borderRadius: 6, color: "#8ab8c8", padding: "6px 10px", fontSize: 11, cursor: "pointer", outline: "none", appearance: "none", WebkitAppearance: "none", minWidth: 140 };
 
   const KCard = ({ lbl, val, sub, c, delta }) => (
     <div style={{ background: "#071e2a", border: "1px solid #162e3a", borderRadius: 9, padding: "13px 15px", flex: 1, minWidth: 110 }}>
@@ -234,6 +254,7 @@ export default function App() {
     <div style={{ minHeight: "100vh", background: "#040f18", fontFamily: "'DM Sans','Helvetica Neue',sans-serif", color: "#aac8d4", padding: "16px 20px" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
+      {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
@@ -252,22 +273,32 @@ export default function App() {
         </div>
       </div>
 
+      {/* FILTERS */}
       <div style={{ background: "#071e2a", border: "1px solid #162e3a", borderRadius: 9, padding: "11px 15px", marginBottom: 14, display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <Filter size={11} color="#63DF4E" />
           <span style={{ color: "#63DF4E", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5 }}>Filters</span>
         </div>
-        {[{ lbl: "Area", v: area, opts: areas, fn: onArea }, { lbl: "Region", v: region, opts: regions, fn: setRegion }, { lbl: "Workflow", v: wf, opts: ["All", "WDF", "RaptorDB"], fn: setWf }, { lbl: "Forecast", v: fc, opts: ["All", "Commit", "Expect", "Upside", "Submitted"], fn: setFc }].map(({ lbl, v, opts, fn }) => (
+        {[
+          { lbl: "Quarter", v: qtr, opts: quarters, fn: setQtr },
+          { lbl: "Area", v: area, opts: areas, fn: onArea },
+          { lbl: "Region", v: region, opts: regions, fn: setRegion },
+          { lbl: "Workflow", v: wf, opts: ["All", "WDF", "RaptorDB"], fn: setWf },
+          { lbl: "Forecast", v: fc, opts: ["All", "Commit", "Expect", "Upside", "Submitted"], fn: setFc }
+        ].map(({ lbl, v, opts, fn }) => (
           <div key={lbl} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <span style={{ color: "#1f4555", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{lbl}</span>
             <select value={v} onChange={e => fn(e.target.value)} style={ss}>{opts.map(o => <option key={o}>{o}</option>)}</select>
           </div>
         ))}
-        <div style={{ marginLeft: "auto", color: "#1f4555", fontSize: 11, alignSelf: "center" }}>{filtered.length} opps ¬∑ <span style={{ color: "#63DF4E", fontWeight: 700 }}>{fmtK(total)}</span></div>
+        <div style={{ marginLeft: "auto", color: "#1f4555", fontSize: 11, alignSelf: "center" }}>
+          {filtered.length} opps ¬∑ <span style={{ color: "#63DF4E", fontWeight: 700 }}>{fmtK(total)}</span>
+        </div>
       </div>
 
+      {/* KPI CARDS */}
       <div style={{ display: "flex", gap: 9, marginBottom: 14, flexWrap: "wrap" }}>
-        <KCard lbl="Total Pipeline" val={fmtK(total)} delta={netDelta} c="#63DF4E" />
+        <KCard lbl="Total Pipeline" val={fmtK(total)} delta={qtr === "All Quarters" ? netDelta : undefined} sub={qtr !== "All Quarters" ? qtr : undefined} c="#63DF4E" />
         <KCard lbl="Commit" val={fmtK(filtered.filter(d => d.forecast_category === "Commit").reduce((s, d) => s + d.nnacv, 0))} sub={`${filtered.filter(d => d.forecast_category === "Commit").length} deals`} c="#22d3ee" />
         <KCard lbl="Expect" val={fmtK(filtered.filter(d => d.forecast_category === "Expect").reduce((s, d) => s + d.nnacv, 0))} sub={`${filtered.filter(d => d.forecast_category === "Expect").length} deals`} c="#a78bfa" />
         <KCard lbl="Upside" val={fmtK(filtered.filter(d => d.forecast_category === "Upside").reduce((s, d) => s + d.nnacv, 0))} sub={`${filtered.filter(d => d.forecast_category === "Upside").length} deals`} c="#f59e0b" />
@@ -276,6 +307,7 @@ export default function App() {
         <KCard lbl="WDF" val={fmtK(filtered.filter(d => d.workflow === "WDF").reduce((s, d) => s + d.nnacv, 0))} sub={`${filtered.filter(d => d.workflow === "WDF").length} deals`} c="#63DF4E" />
       </div>
 
+      {/* CHARTS */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
         <div style={{ background: "#071e2a", border: "1px solid #162e3a", borderRadius: 10, padding: "13px 15px" }}>
           <div style={{ color: "#254555", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Pipeline by Forecast Category</div>
@@ -290,21 +322,22 @@ export default function App() {
           </ResponsiveContainer>
         </div>
         <div style={{ background: "#071e2a", border: "1px solid #162e3a", borderRadius: 10, padding: "13px 15px" }}>
-          <div style={{ color: "#254555", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Pipeline by Area</div>
+          <div style={{ color: "#254555", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Pipeline by Quarter ¬∑ Q1=Jan-Mar ¬∑ Q2=Apr-Jun ¬∑ Q3=Jul-Sep ¬∑ Q4=Oct-Dec</div>
           <ResponsiveContainer width="100%" height={150}>
-            <BarChart data={areaChart} layout="vertical" barSize={11}>
+            <BarChart data={qtrChart} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" stroke="#0d2535" />
-              <XAxis type="number" stroke="#162e3a" tick={{ fontSize: 9, fill: "#254555" }} tickFormatter={v => fmtK(v)} />
-              <YAxis dataKey="name" type="category" stroke="#162e3a" tick={{ fontSize: 9, fill: "#4a7a8a" }} width={90} />
-              <Tooltip contentStyle={{ background: "#071e2a", border: "1px solid #162e3a", borderRadius: 7, color: "#ddeef5" }} formatter={v => [fmtK(v), "Pipeline"]} />
-              <Bar dataKey="v" radius={[0, 4, 4, 0]} fill="#63DF4E" />
+              <XAxis dataKey="name" stroke="#162e3a" tick={{ fontSize: 10, fill: "#4a7a8a" }} />
+              <YAxis stroke="#162e3a" tick={{ fontSize: 9, fill: "#254555" }} tickFormatter={v => fmtK(v)} />
+              <Tooltip contentStyle={{ background: "#071e2a", border: "1px solid #162e3a", borderRadius: 7, color: "#ddeef5" }} formatter={(v, n, p) => [fmtK(v), `${p.payload.n} deals`]} />
+              <Bar dataKey="v" radius={[4, 4, 0, 0]}>{qtrChart.map((q, i) => <Cell key={i} fill={QTR_COLORS[q.name.slice(0, 2)] || "#63DF4E"} />)}</Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
+      {/* DELTA SECTIONS */}
       <div style={{ color: "#162e3a", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 9 }}>
-        Overnight Changes ¬∑ {YESTERDAY_DATE} ‚Üí {TODAY_DATE} ¬∑ {deltas.length} changes ¬∑ net {netDelta >= 0 ? "+" : ""}{fmtK(netDelta)}
+        Overnight Changes ¬∑ {YESTERDAY_DATE} ‚Üí {TODAY_DATE} ¬∑ {fDeltas.length} changes{qtr !== "All Quarters" ? ` ¬∑ ${qtr}` : ""}
       </div>
 
       <Section title="Category Movement" desc="Deals where forecast category changed overnight" accent="#f59e0b" Icon={GitCompare} deals={fMov} empty="No category changes overnight with current filters." isDelta={true} />
