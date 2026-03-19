@@ -108,6 +108,7 @@ function Row({ d, isDelta }) {
           <div style={{ color: "#ddeef5", fontWeight: 600, fontSize: 12 }}>{d.account || "(unnamed)"}</div>
           <div style={{ color: "#3a6070", fontSize: 10, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.opty_name}</div>
         </td>
+        <td style={{ padding: "9px 12px", color: "#9ecfe0", fontSize: 11, whiteSpace: "nowrap" }}>{(d.owner || "").split(" ").slice(0,2).join(" ")}</td>
         <td style={{ padding: "9px 12px" }}><WFChip wf={d.workflow} /></td>
         <td style={{ padding: "9px 12px" }}>
           <div style={{ fontWeight: 800, fontSize: 13, color: "#ddeef5" }}>{fmtK(d.nnacv)}</div>
@@ -124,7 +125,7 @@ function Row({ d, isDelta }) {
       </tr>
       {open && (
         <tr style={{ background: "#081d2c" }}>
-          <td colSpan={isDelta ? 8 : 7} style={{ padding: "6px 12px 12px 24px" }}>
+          <td colSpan={isDelta ? 9 : 8} style={{ padding: "6px 12px 12px 24px" }}>
             <div style={{ display: "flex", gap: 22, flexWrap: "wrap", fontSize: 11 }}>
               <span style={{ color: "#3a6070" }}>Stage: <span style={{ color: "#9ecfe0" }}>{d.stage}</span></span>
               <span style={{ color: "#3a6070" }}>Area: <span style={{ color: "#9ecfe0" }}>{(d.area || "").replace(" (AREA)", "")}</span></span>
@@ -143,8 +144,8 @@ function Section({ title, desc, accent, Icon, deals, empty, isDelta }) {
   const [closed, setClosed] = useState(false);
   const total = deals.reduce((s, d) => s + (d.delta_nnacv || 0), 0);
   const hdrs = isDelta
-    ? ["Account", "Workflow", "NNACV / Œî", "Spec. Category", "Stage", "Close / Qtr", "Change", ""]
-    : ["Account", "Workflow", "NNACV", "Spec. Category", "Stage", "Close / Qtr", ""];
+    ? ["Account", "SSE", "Workflow", "NNACV / Œî", "Spec. Category", "Stage", "Close / Qtr", "Change", ""]
+    : ["Account", "SSE", "Workflow", "NNACV", "Spec. Category", "Stage", "Close / Qtr", ""];
   return (
     <div style={{ marginBottom: 14, borderRadius: 11, overflow: "hidden", border: `1px solid ${accent}22` }}>
       <div onClick={() => setClosed(!closed)} style={{ background: `${accent}08`, padding: "12px 15px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: closed ? "none" : `1px solid ${accent}18` }}>
